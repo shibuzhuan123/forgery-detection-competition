@@ -1,5 +1,5 @@
 from torchvision.datasets import ImageFolder
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 import torchvision.transforms as transforms
 import torch.nn as nn
 import numpy as np
@@ -12,13 +12,10 @@ import torch
 import random
 from torch.optim import lr_scheduler
 from torch.autograd import Variable
-from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
 import timm
 from timm.scheduler.cosine_lr import CosineLRScheduler
 import os
-
-train_path = './data'
-# test_path = './train'
 
 seed = 8079
 torch.manual_seed(seed)
@@ -33,6 +30,7 @@ class FixedRotation(object):
 
     def __call__(self, img):
         return fixed_rotate(img, self.angles)
+
 def fixed_rotate(img, angles):
     angles = list(angles)
     angles_num = len(angles)
@@ -40,30 +38,17 @@ def fixed_rotate(img, angles):
     return img.rotate(angles[index])
 
 train_transform = transforms.Compose([
-   # transforms.RandomRotation(15),
-    transforms.Resize([384,384]),
-   # transforms.RandomVerticalFlip(),
-   transforms.RandomHorizontalFlip(),
-   # FixedRotation([0, 180, ]),
-    #transforms.RandomRotation(90),
+    transforms.Resize([384, 384]),
+    transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize((0.3705, 0.3828, 0.3545), (0.1685, 0.1590, 0.1536))
-   # transforms.Normalize((0.696508, 0.705005, 0.719835), (0.341564, 0.332224, 0.332470))
 ])
+
 val_transform = transforms.Compose([
     transforms.Resize([384, 384]),
     transforms.ToTensor(),
-  transforms.Normalize((0.3705, 0.3828, 0.3545), (0.1685, 0.1590, 0.1536))
-   # transforms.Normalize((0.696508, 0.705005, 0.719835), (0.341564, 0.332224, 0.332470))
+    transforms.Normalize((0.3705, 0.3828, 0.3545), (0.1685, 0.1590, 0.1536))
 ])
-
-# train_transform2 = transforms.Compose([
-#     transforms.AutoAugment(policy=transforms.AutoAugmentPolicy.IMAGENET),
-#     transforms.Resize([256,256]),
-#     transforms.ToTensor(),
-#     transforms.Normalize((0.696508, 0.705005, 0.719835), (0.341564, 0.332224, 0.332470)),
-# ])
-
 
 class ImageDataset(Dataset):
     def __init__(self, csv_file, root_dir, transform=None):
@@ -83,6 +68,7 @@ class ImageDataset(Dataset):
         if self.transform:
             image = self.transform(image)
         return image, label
+
 class FocalLoss(nn.Module):
     def __init__(self, gamma=0, alpha=None, size_average=True):
         super(FocalLoss, self).__init__()
@@ -94,9 +80,9 @@ class FocalLoss(nn.Module):
 
     def forward(self, input, target):
         if input.dim() > 2:
-            input = input.view(input.size(0), input.size(1), -1)  # N,C,H,W => N,C,H*W
-            input = input.transpose(1, 2)  # N,C,H*W => N,H*W,C
-            input = input.contiguous().view(-1, input.size(2))  # N,H*W,C => N*H*W,C
+            input = input.view(input.size(0), input.size(1), -1)
+            input = input.transpose(1, 2)
+            input = input.contiguous().view(-1, input.size(2))
         target = target.view(-1, 1)
         logpt = F.log_softmax(input, dim=1)
         logpt = logpt.gather(1, target)
@@ -115,28 +101,6 @@ class FocalLoss(nn.Module):
         else:
             return loss.sum()
 
-train_dataset=ImageDataset(csv_file='./train.csv',root_dir='./',transform=train_transform)
-trainloader = torch.utils.data.DataLoader(train_dataset, batch_size=16,shuffle=True, num_workers=0)
-
-# test_dataset=ImageFolder(test_path,transform=val_transform)
-# testloader = torch.utils.data.DataLoader(test_dataset, batch_size=64,shuffle=None, num_workers=0)
-model_name = "efficientnet_b1"
-epoch_num=10
-net=timm.create_model(model_name,pretrained=True,num_classes=2).cuda()
-# weight = torch.load('./efficientnet_b0lab_8.pth')
-# net.load_state_dict(weight['model_state_dict'])
-#criterion=FocalLoss(0.5)
-criterion=nn.CrossEntropyLoss()
-# weight_decay = 1e-4  # L2 正则化系数
-optimizer = torch.optim.Adam(net.parameters(), lr=0.001,weight_decay=1e-4)
-#lr_scheduler = CosineLRScheduler(optimizer, t_initial=0.001, lr_min=0.0001)
-lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.1)
-PATH = '/'+model_name  #这里也需要注意，你需要先新建一个dir文件夹，一会在这个文件下存放权重
-pre_acc = 0
-def get_cur_lr(optimizer):
-    for param_group in optimizer.param_groups:
-        return param_group['lr']
-
 def validate(model, dataloader, criterion):
     model.eval()
     val_loss = 0.0
@@ -154,45 +118,125 @@ def validate(model, dataloader, criterion):
     val_loss /= total
     val_acc = 100.0 * correct / total
     return val_loss, val_acc
-best_val_acc=0
+
+def get_cur_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
+
+# 读取数据并划分训练集和验证集
+print("正在加载数据...")
+df = pd.read_csv('./train.csv')
+print(f"总数据量: {len(df)}")
+print(f"类别分布: {df['Label'].value_counts().to_dict()}")
+
+# 划分训练集和验证集 (90% 训练, 10% 验证)
+train_df, val_df = train_test_split(df, test_size=0.1, stratify=df['Label'], random_state=seed)
+print(f"训练集数量: {len(train_df)}")
+print(f"验证集数量: {len(val_df)}")
+print(f"训练集类别分布: {train_df['Label'].value_counts().to_dict()}")
+print(f"验证集类别分布: {val_df['Label'].value_counts().to_dict()}")
+
+# 保存划分后的数据
+train_df.to_csv('./train_split.csv', index=False)
+val_df.to_csv('./val_split.csv', index=False)
+print("数据划分已保存到 train_split.csv 和 val_split.csv")
+
+# 创建训练集和验证集
+train_dataset = ImageDataset(csv_file='./train_split.csv', root_dir='./', transform=train_transform)
+val_dataset = ImageDataset(csv_file='./val_split.csv', root_dir='./', transform=val_transform)
+
+# 计算类别权重用于加权采样
+train_labels = train_df['Label'].values
+class_counts = np.bincount(train_labels)
+class_weights = 1. / class_counts
+samples_weights = class_weights[train_labels]
+
+print(f"\n类别权重: {class_weights}")
+print(f"使用加权采样器平衡类别分布")
+
+# 创建加权采样器
+sampler = WeightedRandomSampler(
+    weights=samples_weights,
+    num_samples=len(samples_weights),
+    replacement=True
+)
+
+# 创建数据加载器
+trainloader = DataLoader(train_dataset, batch_size=16, sampler=sampler, num_workers=0)
+valloader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=0)
+
+print(f"训练集batch数: {len(trainloader)}")
+print(f"验证集batch数: {len(valloader)}")
+
+# 模型设置
+model_name = "efficientnet_b1"
+epoch_num = 10
+net = timm.create_model(model_name, pretrained=True, num_classes=2).cuda()
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(net.parameters(), lr=0.001, weight_decay=1e-4)
+lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.1)
+
+best_val_acc = 0
+
 if __name__ == '__main__':
-    correct = 0
-    total = 0
+    print("\n开始训练...")
     for epoch in range(epoch_num):
         print("========== epoch: [{}/{}] ==========".format(epoch + 1, epoch_num))
-        for i, (inputs, labels) in tqdm(enumerate(trainloader)):
+
+        # 训练阶段
+        net.train()
+        correct = 0
+        total = 0
+        epoch_loss = 0.0
+
+        for i, (inputs, labels) in enumerate(trainloader):
             inputs = inputs.cuda()
             labels = labels.cuda()
             outputs = net(inputs)
             loss = criterion(outputs, labels)
-            correct += (outputs.argmax(dim=1) == labels).sum().item()
-            total += labels.size(0)
-            train_acc = 100.0 * correct / total
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            epoch_loss += loss.item()
+            correct += (outputs.argmax(dim=1) == labels).sum().item()
+            total += labels.size(0)
+
             if i % 10 == 0:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} train acc: {:.6f}  lr : {:.6f}'.format(epoch+1, i * len(inputs),
-                                                                                                              len(trainloader.dataset),100. * i / len(trainloader),loss.item(),train_acc,get_cur_lr(optimizer)))
-        if epoch % 1 ==0:
-            torch.save({'epoch': epoch,
-                        'model_state_dict': net.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'loss': loss
-                        },'./efficientnet_b1_384'+PATH + "_"+str(epoch)+".pth")
-        # print('===================test============================')
-        # val_loss, val_acc = validate(net, testloader, criterion)
-        # print(f'Validation Loss: {val_loss:.6f}, Validation Accuracy: {val_acc:.6f}')
-        
-        # Save the model if it has the best accuracy so far
-        # if val_acc > best_val_acc:
-        #     best_val_acc = val_acc
-        # torch.save({'epoch': epoch,
-        #             'model_state_dict': net.state_dict(),
-        #             'optimizer_state_dict': optimizer.state_dict(),tra
-        #             }, './weights2/'+PATH + "_best.pth")
-        
-        # Save the model checkpoint
-        
-        
+                train_acc = 100.0 * correct / total
+                avg_loss = epoch_loss / (i + 1)
+                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} train acc: {:.6f}  lr : {:.6f}'.format(
+                    epoch+1, i * len(inputs), len(trainloader.dataset),
+                    100. * i / len(trainloader), avg_loss, train_acc, get_cur_lr(optimizer)))
+
+        # 验证阶段
+        val_loss, val_acc = validate(net, valloader, criterion)
+        print(f'Validation Loss: {val_loss:.6f}, Validation Accuracy: {val_acc:.6f}')
+
+        # 保存最佳模型
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'val_acc': val_acc,
+                'val_loss': val_loss
+            }, './best_model.pth')
+            print(f'✅ Best model saved with val_acc: {val_acc:.2f}%')
+
+        # 每个epoch保存一次checkpoint
+        if epoch % 1 == 0:
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+                'val_acc': val_acc,
+                'val_loss': val_loss
+            }, f'./checkpoint_epoch_{epoch}.pth')
+
         lr_scheduler.step()
+
+    print(f"\n训练完成！最佳验证准确率: {best_val_acc:.2f}%")
