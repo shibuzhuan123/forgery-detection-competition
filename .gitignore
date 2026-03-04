@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# PyTorch
+*.pth
+*.pt
+*.ckpt
+
+# Data
+data/
+ForgeryAnalysis_Stage_1_Train/
+ForgeryAnalysis_Stage_1_Test/
+*.tar.gz
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model weights (optional - uncomment if you want to ignore model files)
+# weights/
+
+# Logs
+*.log
+runs/
+
+# CSV files (optional - keep your data files)
+# *.csv
+!train.csv
+!submit_example.csv
