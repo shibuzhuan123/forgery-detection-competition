@@ -165,8 +165,8 @@ sampler = WeightedRandomSampler(
 )
 
 # 创建数据加载器
-trainloader = DataLoader(train_dataset, batch_size=16, sampler=sampler, num_workers=0)
-valloader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=0)
+trainloader = DataLoader(train_dataset, batch_size=64, sampler=sampler, num_workers=0)
+valloader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=0)
 
 print(f"训练集batch数: {len(trainloader)}")
 print(f"验证集batch数: {len(valloader)}")
