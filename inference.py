@@ -54,12 +54,12 @@ with torch.no_grad():
         output = net(image)
         pred = output.argmax(dim=1).item()
 
-        # 创建结果
+        # 创建结果 (注意: 0=伪造, 1=真实)
         result = {
             'image_name': img_name,
             'label': pred,
             'location': '',  # 可选：伪造区域定位
-            'explanation': '真实图片' if pred == 0 else '伪造图片'
+            'explanation': '真实图片' if pred == 1 else '伪造图片'  # 1=真实, 0=伪造
         }
         results.append(result)
 
@@ -71,8 +71,8 @@ df_results.to_csv(output_file, index=False)
 print(f"\n预测完成！")
 print(f"结果已保存到: {output_file}")
 print(f"\n预测统计:")
-print(f"真实图片 (label=0): {sum(1 for r in results if r['label'] == 0)}")
-print(f"伪造图片 (label=1): {sum(1 for r in results if r['label'] == 1)}")
+print(f"伪造图片 (label=0): {sum(1 for r in results if r['label'] == 0)}")
+print(f"真实图片 (label=1): {sum(1 for r in results if r['label'] == 1)}")
 
 # 显示前5个预测结果
 print(f"\n前5个预测结果:")
