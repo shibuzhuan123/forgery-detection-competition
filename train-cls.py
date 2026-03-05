@@ -36,15 +36,12 @@ def fixed_rotate(img, angles):
     index = random.randint(0, angles_num - 1)
     return img.rotate(angles[index])
 
-# 训练数据增强 - 增强版
+# 训练数据增强 - 温和版
 train_transform = transforms.Compose([
-    transforms.Resize([416, 416]),  # 稍微大一点，方便后续裁剪
-    transforms.RandomCrop([384, 384]),  # 随机裁剪
+    transforms.Resize([384, 384]),
     transforms.RandomHorizontalFlip(p=0.5),  # 随机水平翻转
-    transforms.RandomVerticalFlip(p=0.2),  # 随机垂直翻转
-    transforms.RandomRotation(15),  # 随机旋转±15度
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # 颜色抖动
-    transforms.RandomAffine(0, translate=(0.1, 0.1), scale=(0.9, 1.1)),  # 随机平移和缩放
+    transforms.RandomRotation(10),  # 随机旋转±10度（减小角度）
+    transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),  # 颜色抖动（减小强度，去掉hue）
     transforms.ToTensor(),
     transforms.Normalize((0.3705, 0.3828, 0.3545), (0.1685, 0.1590, 0.1536))
 ])
