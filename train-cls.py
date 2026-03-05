@@ -181,7 +181,8 @@ num_ftrs = net.classifier[1].in_features
 net.classifier[1] = nn.Linear(num_ftrs, 2)
 net = net.cuda()
 
-print(f"模型已加载，参数量: {sum(p.numel() for p in net.parameters()):,}")
+class_weights = torch.tensor([4.0, 1.0]).cuda()  # 给伪造类(0)更高权重
+criterion = nn.CrossEntropyLoss(weight=class_weights)
 print("注意：使用随机初始化权重（未加载预训练权重）")
 print("数据增强：随机裁剪、旋转、翻转、颜色抖动、平移缩放")
 criterion = nn.CrossEntropyLoss()
