@@ -9,12 +9,11 @@ from PIL import Image
 from tqdm import tqdm
 import torch.nn.functional as F
 import torch
+import torchvision.models as models
 import random
 from torch.optim import lr_scheduler
 from torch.autograd import Variable
 from sklearn.model_selection import train_test_split
-import timm
-from timm.scheduler.cosine_lr import CosineLRScheduler
 import os
 
 seed = 8079
@@ -168,10 +167,18 @@ valloader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=0)
 print(f"训练集batch数: {len(trainloader)}")
 print(f"验证集batch数: {len(valloader)}")
 
-# 模型设置
-model_name = "efficientnet_b1"
+# 模型设置 - 使用torchvision的EfficientNet
 epoch_num = 10
-net = timm.create_model(model_name, pretrained=True, num_classes=2).cuda()
+print("正在加载EfficientNet-B1模型...")
+net = models.efficientnet_b1(weights=None)  # 不加载预训练权重，从头训练
+
+# 修改最后一层为二分类
+num_ftrs = net.classifier[1].in_features
+net.classifier[1] = nn.Linear(num_ftrs, 2)
+net = net.cuda()
+
+print(f"模型已加载，参数量: {sum(p.numel() for p in net.parameters()):,}")
+print("注意：使用随机初始化权重（未加载预训练权重）")
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=0.001, weight_decay=1e-4)
 lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.1)
