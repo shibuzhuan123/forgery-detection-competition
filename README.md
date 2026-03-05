@@ -116,18 +116,43 @@ train_transform = transforms.Compose([
 
 ### ① 环境准备
 - [x] 创建Conda环境 `ForgeryAnalysis` (Python 3.10)
-- [x] 安装PyTorch及依赖包 (CUDA 12.4版本)
-- [x] 安装必要的Python库 (timm, tqdm, pandas, pillow)
+- [x] 安装PyTorch 2.10.0 (CUDA 12.8版本)
+- [x] 安装必要的Python库 (torchvision, tqdm, pandas, pillow, scikit-learn)
 
-### ② 数据处理
+### ② Git & GitHub 仓库设置
+- [x] 初始化Git仓库
+- [x] 创建GitHub远程仓库: https://github.com/shibuzhuan123/forgery-detection-competition
+- [x] 配置代理和凭据
+- [x] 创建.gitignore文件
+
+### ③ 数据处理
 - [x] 解压训练和测试数据集
 - [x] 创建符号链接，组织数据到 `data/0/` 和 `data/1/`
 - [x] 生成训练标签文件 `train.csv` (1000条记录)
 - [x] 验证数据完整性 (800真实 + 200伪造)
+- [x] **数据集划分**: 90%训练 + 10%验证 (分层采样)
+- [x] **生成划分文件**: `train_split.csv` (900张) + `val_split.csv` (100张)
 
-### ③ 代码准备
+### ④ 代码优化
 - [x] 提供完整的训练脚本 `train-cls.py`
+- [x] **实现数据集划分**: 使用sklearn的train_test_split
+- [x] **实现加权采样器**: WeightedRandomSampler处理类别不平衡
+- [x] **添加验证循环**: 每个epoch后在验证集上评估
+- [x] **自动保存最佳模型**: 基于验证准确率
+- [x] **保存所有checkpoint**: 每个epoch保存一次
+- [x] **模型切换**: 从timm改为torchvision.models (避免下载问题)
+
+### ⑤ 模型训练
+- [x] **完成10个epoch训练**
+- [x] **最佳验证准确率**: 81.00% (Epoch 2)
+- [x] **模型保存**: best_model.pth + 所有epoch checkpoints
+- [x] 使用EfficientNet-B1 (6,515,746参数)
+- [x] 从头训练 (未使用预训练权重)
+
+### ⑥ 代码准备
 - [x] 提供依赖安装脚本 `install_deps.sh`
+- [x] 创建GitHub设置脚本 `setup_github.sh`
+- [x] 创建Git使用指南 `GIT_GUIDE.md`
 - [x] 创建项目文档 `README.md`
 
 ### ④ 数据统计
@@ -234,6 +259,36 @@ transforms.Compose([
 
 ---
 
+## 📊 训练结果
+
+### 模型性能
+- **最佳验证准确率**: 81.00% (Epoch 2)
+- **训练轮数**: 10 epochs
+- **模型**: EfficientNet-B1
+- **参数量**: 6,515,746
+
+### 训练过程
+| Epoch | 训练准确率 | 验证准确率 | 验证损失 | 学习率 |
+|-------|-----------|-----------|---------|--------|
+| 1 | 51.47% | 20.00% | 0.720 | 0.001 |
+| 2 | 51.10% | **81.00%** ⭐ | 0.679 | 0.001 |
+| 3 | 50.74% | 48.00% | 0.705 | 0.001 |
+| 4 | 53.19% | 38.00% | 0.698 | 0.001 |
+| 5 | 58.82% | 54.00% | 0.674 | 0.0001 |
+| 6 | 61.76% | 66.00% | 0.611 | 0.0001 |
+| 7 | 64.09% | 69.00% | 0.633 | 0.0001 |
+| 8 | 64.83% | 64.00% | 0.685 | 0.0001 |
+| 9 | 65.93% | 70.00% | 0.661 | 0.00001 |
+| 10 | 69.12% | 63.00% | 0.759 | 0.00001 |
+
+### 生成文件
+- `best_model.pth` - 最佳模型 (81% 准确率)
+- `checkpoint_epoch_*.pth` - 所有epoch的checkpoint
+- `train_split.csv` - 训练集划分 (900张)
+- `val_split.csv` - 验证集划分 (100张)
+
+---
+
 ## 📊 提交格式说明
 
 ### 提交文件格式
@@ -258,21 +313,17 @@ image_name,label,location,explanation
 
 ## 🎯 下一步行动建议
 
-### 立即可做
-1. ✅ 运行baseline代码，查看初始效果
+### ✅ 已完成
+1. ✅ 运行baseline代码，完成训练
 2. ✅ 添加验证集，监控训练过程
-3. ✅ 实现Early Stopping机制
+3. ✅ 实现加权采样器处理类别不平衡
+4. ✅ 自动保存最佳模型
 
-### 优化提升
-1. 🔧 处理类别不平衡问题
-2. 🔧 增加数据增强策略
-3. 🔧 尝试不同的模型 (EfficientNet-B2/B3, ViT等)
-4. 🔧 调整超参数 (learning rate, batch size等)
-
-### 高级技巧
-1. ⭐ 使用Test Time Augmentation (TTA)
-2. ⭐ 模型集成 (Model Ensemble)
-3. ⭐ 伪标签 (Semi-supervised Learning)
+### 🔧 待完成
+1. 🔲 **创建推理脚本** - 对测试集进行预测
+2. 🔲 **生成提交文件** - 按照比赛格式生成CSV
+3. 🔲 **优化模型性能** - 尝试预训练权重
+4. 🔲 **增加数据增强** - 提升模型泛化能力
 
 ---
 
