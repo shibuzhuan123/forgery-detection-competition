@@ -36,13 +36,20 @@ def fixed_rotate(img, angles):
     index = random.randint(0, angles_num - 1)
     return img.rotate(angles[index])
 
+# 训练数据增强 - 增强版
 train_transform = transforms.Compose([
-    transforms.Resize([384, 384]),
-    transforms.RandomHorizontalFlip(),
+    transforms.Resize([416, 416]),  # 稍微大一点，方便后续裁剪
+    transforms.RandomCrop([384, 384]),  # 随机裁剪
+    transforms.RandomHorizontalFlip(p=0.5),  # 随机水平翻转
+    transforms.RandomVerticalFlip(p=0.2),  # 随机垂直翻转
+    transforms.RandomRotation(15),  # 随机旋转±15度
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # 颜色抖动
+    transforms.RandomAffine(0, translate=(0.1, 0.1), scale=(0.9, 1.1)),  # 随机平移和缩放
     transforms.ToTensor(),
     transforms.Normalize((0.3705, 0.3828, 0.3545), (0.1685, 0.1590, 0.1536))
 ])
 
+# 验证数据转换（不增强）
 val_transform = transforms.Compose([
     transforms.Resize([384, 384]),
     transforms.ToTensor(),
@@ -168,7 +175,7 @@ print(f"训练集batch数: {len(trainloader)}")
 print(f"验证集batch数: {len(valloader)}")
 
 # 模型设置 - 使用torchvision的EfficientNet
-epoch_num = 10
+epoch_num = 20  # 增加训练轮数
 print("正在加载EfficientNet-B1模型...")
 net = models.efficientnet_b1(weights=None)  # 不加载预训练权重，从头训练
 
@@ -179,11 +186,14 @@ net = net.cuda()
 
 print(f"模型已加载，参数量: {sum(p.numel() for p in net.parameters()):,}")
 print("注意：使用随机初始化权重（未加载预训练权重）")
+print("数据增强：随机裁剪、旋转、翻转、颜色抖动、平移缩放")
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=0.001, weight_decay=1e-4)
 lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.1)
 
 best_val_acc = 0
+patience = 5  # 早停耐心值
+patience_counter = 0  # 当前等待计数
 
 if __name__ == '__main__':
     print("\n开始训练...")
@@ -224,6 +234,7 @@ if __name__ == '__main__':
         # 保存最佳模型
         if val_acc > best_val_acc:
             best_val_acc = val_acc
+            patience_counter = 0  # 重置早停计数
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': net.state_dict(),
@@ -232,6 +243,9 @@ if __name__ == '__main__':
                 'val_loss': val_loss
             }, './best_model.pth')
             print(f'✅ Best model saved with val_acc: {val_acc:.2f}%')
+        else:
+            patience_counter += 1
+            print(f'⏳ No improvement for {patience_counter} epoch(s) (patience={patience})')
 
         # 每个epoch保存一次checkpoint
         if epoch % 1 == 0:
@@ -243,6 +257,12 @@ if __name__ == '__main__':
                 'val_acc': val_acc,
                 'val_loss': val_loss
             }, f'./checkpoint_epoch_{epoch}.pth')
+
+        # 早停检查
+        if patience_counter >= patience:
+            print(f'\n⚠️ Early stopping triggered! No improvement for {patience} epochs.')
+            print(f'Best validation accuracy: {best_val_acc:.2f}% at epoch {epoch - patience + 1}')
+            break
 
         lr_scheduler.step()
 
